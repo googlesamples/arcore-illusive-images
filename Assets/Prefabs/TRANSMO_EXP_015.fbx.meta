@@ -1,0 +1,146 @@
+fileFormatVersion: 2
+guid: 72047394ec0d74007988f656c9ebade3
+timeCreated: 1524011723
+licenseType: Pro
+ModelImporter:
+  serializedVersion: 22
+  fileIDToRecycleName:
+    100000: baked
+    100002: Camera___bake
+    100004: Camera___target
+    100006: Camera___target_1
+    100008: Camera___target_2
+    100010: cams
+    100012: center_1__Copy__1__Copy_
+    100014: center_1__Copy__2__Copy_
+    100016: center_1__Copy__3__Copy_
+    100018: center_1__Copy__4__Copy_
+    100020: center_1__Copy__5__Copy_
+    100022: center_1__Copy__6__Copy_
+    100024: center_1__Copy___Copy_
+    100026: Pos_01
+    100028: //RootNode
+    400000: baked
+    400002: Camera___bake
+    400004: Camera___target
+    400006: Camera___target_1
+    400008: Camera___target_2
+    400010: cams
+    400012: center_1__Copy__1__Copy_
+    400014: center_1__Copy__2__Copy_
+    400016: center_1__Copy__3__Copy_
+    400018: center_1__Copy__4__Copy_
+    400020: center_1__Copy__5__Copy_
+    400022: center_1__Copy__6__Copy_
+    400024: center_1__Copy___Copy_
+    400026: Pos_01
+    400028: //RootNode
+    2000000: Camera___bake
+    2000002: Camera___target
+    2000004: Camera___target_1
+    2000006: Camera___target_2
+    2100000: Mat
+    2300000: center_1__Copy__1__Copy_
+    2300002: center_1__Copy__2__Copy_
+    2300004: center_1__Copy__3__Copy_
+    2300006: center_1__Copy__4__Copy_
+    2300008: center_1__Copy__5__Copy_
+    2300010: center_1__Copy__6__Copy_
+    2300012: center_1__Copy___Copy_
+    3300000: center_1__Copy__1__Copy_
+    3300002: center_1__Copy__2__Copy_
+    3300004: center_1__Copy__3__Copy_
+    3300006: center_1__Copy__4__Copy_
+    3300008: center_1__Copy__5__Copy_
+    3300010: center_1__Copy__6__Copy_
+    3300012: center_1__Copy___Copy_
+    4300000: center_1__Copy__1__Copy_
+    4300002: center_1__Copy___Copy_
+    4300004: center_1__Copy__2__Copy_
+    4300006: center_1__Copy__3__Copy_
+    4300008: center_1__Copy__4__Copy_
+    4300010: center_1__Copy__5__Copy_
+    4300012: center_1__Copy__6__Copy_
+    7400000: CINEMA_4D_Main
+    9500000: //RootNode
+    11100000: //RootNode
+  externalObjects: {}
+  materials:
+    importMaterials: 1
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    motionNodeName: 
+    rigImportErrors: 
+    rigImportWarnings: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    optimizeMeshForGPU: 1
+    keepQuads: 0
+    weldVertices: 1
+    preserveHierarchy: 0
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+  importAnimation: 1
+  copyAvatar: 0
+  humanDescription:
+    serializedVersion: 2
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    rootMotionBoneName: 
+    rootMotionBoneRotation: {x: 0, y: 0, z: 0, w: 1}
+    hasTranslationDoF: 0
+    hasExtraRoot: 1
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  animationType: 1
+  humanoidOversampling: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
