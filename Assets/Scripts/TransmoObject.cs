@@ -59,7 +59,6 @@ namespace GoogleARCore
         
         private Animation m_Anim;
         private float m_LastT;
-        private GameObject m_FirstPersonCam;
 
         private float m_HalfWidth;
         private float m_HalfHeight;
@@ -120,8 +119,6 @@ namespace GoogleARCore
                 m_Anim.Play("CINEMA_4D_Main");
                 m_Anim["CINEMA_4D_Main"].speed = 0f;
             }
-
-            m_FirstPersonCam = GameObject.Find("First Person Camera");
         }
 
         /// <summary>
