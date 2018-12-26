@@ -1,0 +1,7 @@
+Library/
+Temp/
+*.csproj
+*.sln
+*.apk
+ProjectSettings/ProjectVersion.txt
+
