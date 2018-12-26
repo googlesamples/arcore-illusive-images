@@ -20,6 +20,7 @@
 
 namespace GoogleARCore
 {
+    using GoogleARCoreInternal;
     using UnityEngine;
     using UnityEngine.Rendering;
 
@@ -28,15 +29,18 @@ namespace GoogleARCore
     /// to be inline with those estimated by ARCore.
     /// </summary>
     [ExecuteInEditMode]
+    [HelpURL("https://developers.google.com/ar/reference/unity/class/GoogleARCore/EnvironmentalLight")]
     public class EnvironmentalLight : MonoBehaviour
     {
         /// <summary>
         /// Unity update method that sets global light estimation shader constant to match
         /// ARCore's calculated values.
         /// </summary>
+        [SuppressMemoryAllocationError(IsWarning = true, Reason = "Requires further investigation.")]
         public void Update()
         {
-            if (Application.isEditor && !GoogleARCoreInternal.ARCoreProjectSettings.Instance.IsInstantPreviewEnabled)
+            if (Application.isEditor && (!Application.isPlaying ||
+                 !GoogleARCoreInternal.ARCoreProjectSettings.Instance.IsInstantPreviewEnabled))
             {
                 // Set _GlobalColorCorrection to white in editor, if the value is not set, all materials
                 // using light estimation shaders will be black.

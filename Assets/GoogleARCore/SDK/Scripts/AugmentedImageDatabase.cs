@@ -39,6 +39,8 @@ namespace GoogleARCore
     /// </summary>
     public class AugmentedImageDatabase : ScriptableObject
     {
+        private IntPtr m_ArPrestoDatabase = IntPtr.Zero;
+
         [SerializeField]
         private List<AugmentedImageDatabaseEntry> m_Images = new List<AugmentedImageDatabaseEntry>();
 
@@ -57,13 +59,58 @@ namespace GoogleARCore
 #pragma warning restore 414
 
         /// <summary>
+        /// Constructs a new <c>AugmentedImageDatabase</c>.
+        /// </summary>
+        public AugmentedImageDatabase()
+        {
+            m_IsDirty = true;
+        }
+
+        /// <summary>
         /// Gets the number of images in the database.
         /// </summary>
         public int Count
         {
             get
             {
-                return m_Images.Count;
+                lock (m_Images)
+                {
+                    return m_Images.Count;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the AugmentedImageDatabase is dirty and has to be reset in ArCore.
+        /// </summary>
+        internal bool m_IsDirty { get; private set; }
+
+        /// <summary>
+        /// Gets or sets the native handle for an associated ArPrestoAugmentedImageDatabase.
+        /// <summary>
+        internal IntPtr m_ArPrestoDatabaseHandle
+        {
+            get
+            {
+                if (m_ArPrestoDatabase == IntPtr.Zero)
+                {
+                    var nativeSession = LifecycleManager.Instance.NativeSession;
+                    if (nativeSession == null)
+                    {
+                        return IntPtr.Zero;
+                    }
+
+                    m_ArPrestoDatabase = nativeSession.AugmentedImageDatabaseApi
+                            .CreateArPrestoAugmentedImageDatabase(m_RawData);
+                }
+
+                m_IsDirty = false;
+                return m_ArPrestoDatabase;
+            }
+
+            private set
+            {
+                m_ArPrestoDatabase = value;
             }
         }
 
@@ -78,7 +125,10 @@ namespace GoogleARCore
         {
             get
             {
-                return m_Images[index];
+                lock (m_Images)
+                {
+                    return m_Images[index];
+                }
             }
 
 #if UNITY_EDITOR
@@ -87,7 +137,9 @@ namespace GoogleARCore
                 var oldValue = m_Images[index];
                 m_Images[index] = value;
 
-                if (oldValue.TextureGUID != m_Images[index].TextureGUID)
+                if (oldValue.TextureGUID != m_Images[index].TextureGUID
+                    || oldValue.Name != m_Images[index].Name
+                    || oldValue.Width != m_Images[index].Width)
                 {
                     m_IsRawDataDirty = true;
                 }
@@ -95,6 +147,40 @@ namespace GoogleARCore
                 EditorUtility.SetDirty(this);
             }
 #endif
+        }
+
+        /// <summary>
+        /// Adds an image to this database.
+        ///
+        /// This function takes time to perform non-trivial image processing (20ms -
+        /// 30ms), and should be run on a background thread.
+        /// </summary>
+        /// <param name="name">The name of the image.</param>
+        /// <param name="image">The image to be added.</param>
+        /// <param name="width">The physical width of the image in meters, or 0 if the width is unkwown.</param>
+        /// <returns>The index of the added image in this database or -1 if there was an error.</returns>
+        [SuppressMemoryAllocationError(Reason = "Allocates memory for the image.")]
+        public Int32 AddImage(string name, Texture2D image, float width = 0)
+        {
+            var nativeSession = LifecycleManager.Instance.NativeSession;
+            if (nativeSession == null)
+            {
+                return -1;
+            }
+
+            Int32 imageIndex = nativeSession.AugmentedImageDatabaseApi.AddImageAtRuntime(m_ArPrestoDatabaseHandle, name,
+                    image, width);
+
+            if (imageIndex != -1)
+            {
+                lock (m_Images)
+                {
+                    m_Images.Add(new AugmentedImageDatabaseEntry(name, width));
+                    m_IsDirty = true;
+                }
+            }
+
+            return imageIndex;
         }
 
 #if UNITY_EDITOR
@@ -171,6 +257,14 @@ namespace GoogleARCore
             File.WriteAllLines(inputImagesFile, fileLines);
             var rawDatabasePath = Path.Combine(tempDirectoryPath, "out_database");
             string output;
+#if !UNITY_EDITOR_WIN
+            ShellHelper.RunCommand("chmod", "+x \"" + cliBinaryPath + "\"", out output, out error);
+            if (!string.IsNullOrEmpty(error))
+            {
+                Debug.LogWarning(error);
+                return;
+            }
+#endif
             ShellHelper.RunCommand(cliBinaryPath,
                 string.Format("build-db --input_image_list_path {0} --output_db_path {1}",
                               inputImagesFile, rawDatabasePath), out output, out error);
@@ -212,6 +306,15 @@ namespace GoogleARCore
             string currentCliVersion;
             {
                 string error;
+#if !UNITY_EDITOR_WIN
+                string output;
+                ShellHelper.RunCommand("chmod", "+x " + cliBinaryPath, out output, out error);
+                if (!string.IsNullOrEmpty(error))
+                {
+                    Debug.LogWarning(error);
+                    return dirtyEntries;
+                }
+#endif
                 ShellHelper.RunCommand(cliBinaryPath, "version", out currentCliVersion, out error);
 
                 if (!string.IsNullOrEmpty(error))
@@ -268,19 +371,12 @@ namespace GoogleARCore
                 return false;
             }
 
-            path = AssetDatabase.GUIDToAssetPath(cliBinaryGuid[0]);
+            // Remove the '/Assets' from the project path since it will be added in the path below.
+            string projectPath = Application.dataPath.Substring(0, Application.dataPath.Length - 6);
+            path = Path.Combine(projectPath, AssetDatabase.GUIDToAssetPath(cliBinaryGuid[0]));
             return !string.IsNullOrEmpty(path);
         }
         /// @endcond
 #endif
-
-        /// <summary>
-        /// Gets the raw serialized data for this database.
-        /// </summary>
-        /// <returns>The data as a byte array.</returns>
-        internal byte[] GetRawData()
-        {
-            return m_RawData;
-        }
     }
 }

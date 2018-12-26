@@ -63,19 +63,13 @@ namespace GoogleARCore
         /// <returns>The tracking state of for the Trackable in the current frame.</returns>
         public virtual TrackingState TrackingState
         {
+            [SuppressMemoryAllocationError(IsWarning = true, Reason = "Requires further investigation.")]
             get
             {
-                // TODO (b/73256094): Remove isTracking when fixed.
-                var isTracking = LifecycleManager.Instance.IsTracking;
                 if (_IsSessionDestroyed())
                 {
                     // Trackables from another session are considered stopped.
                     return TrackingState.Stopped;
-                }
-                else if (!isTracking)
-                {
-                    // If there are no new frames coming in we must manually return paused.
-                    return TrackingState.Paused;
                 }
 
                 return m_NativeSession.TrackableApi.GetTrackingState(m_TrackableNativeHandle);
@@ -90,6 +84,7 @@ namespace GoogleARCore
         /// </summary>
         /// <param name="pose">The Pose of the location to create the anchor.</param>
         /// <returns>An Anchor attached to the Trackable at <c>Pose</c>.</returns>
+        [SuppressMemoryAllocationError(Reason = "Could allocate a new Anchor object")]
         public virtual Anchor CreateAnchor(Pose pose)
         {
             if (_IsSessionDestroyed())
@@ -112,6 +107,7 @@ namespace GoogleARCore
         /// Gets all anchors attached to the Trackable.
         /// </summary>
         /// <param name="anchors">A list of anchors to be filled by the method.</param>
+        [SuppressMemoryAllocationError(Reason = "List could be resized.")]
         public virtual void GetAllAnchors(List<Anchor> anchors)
         {
             if (_IsSessionDestroyed())
@@ -127,7 +123,7 @@ namespace GoogleARCore
         /// <summary>
         /// Tells if the session was destroyed.
         /// </summary>
-        /// <returns><c>true</c> if the session this Trackable belong to was destroyed,
+        /// <returns><c>true</c> if the session this Trackable belongs to was destroyed,
         /// <c>false</c> otherwise.</returns>
         protected bool _IsSessionDestroyed()
         {

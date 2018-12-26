@@ -21,11 +21,12 @@
 namespace GoogleARCoreInternal
 {
     using System;
+    using System.Collections.Generic;
     using System.Runtime.InteropServices;
     using GoogleARCore;
     using UnityEngine;
 
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
     using AndroidImport = GoogleARCoreInternal.DllImportNoop;
     using IOSImport = System.Runtime.InteropServices.DllImportAttribute;
 #else
@@ -36,10 +37,11 @@ namespace GoogleARCoreInternal
     internal class ARCoreAndroidLifecycleManager : ILifecycleManager
     {
         private static ARCoreAndroidLifecycleManager s_Instance;
-
         private ARCoreSessionConfig m_CachedConfig = null;
+        private List<IntPtr> m_TempCameraConfigHandles = new List<IntPtr>();
+        private List<CameraConfig> m_TempCameraConfigs = new List<CameraConfig>();
 
-        public event LifecycleManager.EarlyUpdateDelegate EarlyUpdateEvent;
+        public event Action EarlyUpdate;
 
         public static ARCoreAndroidLifecycleManager Instance
         {
@@ -49,39 +51,31 @@ namespace GoogleARCoreInternal
                 {
                     s_Instance = new ARCoreAndroidLifecycleManager();
                     s_Instance._Initialize();
+                    ARPrestoCallbackManager.Instance.EarlyUpdate += s_Instance._OnEarlyUpdate;
+                    ARPrestoCallbackManager.Instance.BeforeResumeSession += s_Instance._OnBeforeResumeSession;
+                    s_Instance.EarlyUpdate += InstantPreviewManager.OnEarlyUpdate;
                 }
 
                 return s_Instance;
             }
         }
 
-        public Texture2D BackgroundTexture { get; private set; }
-
-        public bool IsTracking { get; private set; }
-
-        public NativeSession NativeSession { get; private set; }
+        public SessionStatus SessionStatus { get; private set; }
 
         public ARCoreSession SessionComponent { get; private set; }
 
-        public SessionStatus SessionStatus { get; private set; }
+        public NativeSession NativeSession { get; private set; }
 
-        public void SetConfiguration(ARCoreSessionConfig config)
+        public Texture2D BackgroundTexture { get; private set; }
+
+        public AsyncTask<ApkAvailabilityStatus> CheckApkAvailability()
         {
-            if (config == null)
-            {
-                return;
-            }
+            return ARPrestoCallbackManager.Instance.CheckApkAvailability();
+        }
 
-            if (m_CachedConfig == null || !config.Equals(m_CachedConfig) ||
-                ExperimentManager.Instance.IsConfigurationDirty)
-            {
-                GCHandle handle;
-                var prestoConfig = new ApiPrestoConfig(config, out handle);
-                ExternApi.ArPresto_setConfiguration(ref prestoConfig);
-                m_CachedConfig = ScriptableObject.CreateInstance<ARCoreSessionConfig>();
-                m_CachedConfig.CopyFrom(config);
-                handle.Free();
-            }
+        public AsyncTask<ApkInstallationStatus> RequestApkInstallation(bool userRequested)
+        {
+            return ARPrestoCallbackManager.Instance.RequestApkInstallation(userRequested);
         }
 
         public void CreateSession(ARCoreSession sessionComponent)
@@ -97,8 +91,6 @@ namespace GoogleARCoreInternal
             }
 
             SessionComponent = sessionComponent;
-            ARPrestoCallbackManager.Instance.InitializeIfNeeded();
-            EnableSession();
         }
 
         public void EnableSession()
@@ -109,7 +101,7 @@ namespace GoogleARCoreInternal
                 return;
             }
 
-            SetConfiguration(SessionComponent.SessionConfig);
+            _SetConfiguration(SessionComponent.SessionConfig);
             ExternApi.ArPresto_setEnabled(true);
         }
 
@@ -124,58 +116,100 @@ namespace GoogleARCoreInternal
             ExternApi.ArPresto_reset();
         }
 
-        internal void EarlyUpdate()
+        private void _OnBeforeResumeSession(IntPtr sessionHandle)
         {
-            // Get the latest session handle from presto.
-            IntPtr sessionHandle = IntPtr.Zero;
-            ExternApi.ArPresto_getSession(ref sessionHandle);
-
-            // Update the display geometry if there is a non-null session.
-            if (sessionHandle != IntPtr.Zero)
-            {
-                _SetDisplayGeometry(sessionHandle, Screen.orientation, Screen.width, Screen.height);
-            }
-
-            // Update ArPresto and potentially ArCore.
-            ExternApi.ArPresto_update();
-
-            // Update pending AsyncTasks.
-            AsyncTask.OnUpdate();
-
-            // Update the lifecycle state.
-            _UpdateState();
-
-            // Return if there is no session component in the scene.
             if (SessionComponent == null)
             {
                 return;
             }
 
-            ExternApi.ArPresto_getSession(ref sessionHandle);
-
-            IntPtr frameHandle = IntPtr.Zero;
-            ExternApi.ArPresto_getFrame(ref frameHandle);
-
-            if (NativeSession == null && sessionHandle != IntPtr.Zero)
+            var chooseCameraConfiguration = SessionComponent.GetChooseCameraConfigurationCallback();
+            if (chooseCameraConfiguration == null)
             {
-                NativeSession = new NativeSession(sessionHandle, frameHandle);
-                NativeSession.SessionApi.ReportEngineType();
+                return;
             }
 
+            if (NativeSession == null)
+            {
+                NativeSession = new NativeSession(sessionHandle, IntPtr.Zero);
+            }
+
+            var listHandle = NativeSession.CameraConfigListApi.Create();
+            NativeSession.SessionApi.GetSupportedCameraConfigurations(listHandle, m_TempCameraConfigHandles,
+                m_TempCameraConfigs);
+
+            if (m_TempCameraConfigHandles.Count == 0)
+            {
+                Debug.LogWarning("Unable to choose a custom camera configuration because none are available.");
+            }
+            else
+            {
+                var configIndex = chooseCameraConfiguration(m_TempCameraConfigs);
+                if (configIndex >= 0 && configIndex < m_TempCameraConfigHandles.Count)
+                {
+                    var status = NativeSession.SessionApi.SetCameraConfig(m_TempCameraConfigHandles[configIndex]);
+                    if (status != ApiArStatus.Success)
+                    {
+                        Debug.LogErrorFormat("Failed to set the ARCore camera configuration: {0}", status);
+                    }
+                }
+
+                for (int i = 0; i < m_TempCameraConfigHandles.Count; i++)
+                {
+                    NativeSession.CameraConfigApi.Destroy(m_TempCameraConfigHandles[i]);
+                }
+            }
+
+            // clean up
+            NativeSession.CameraConfigListApi.Destroy(listHandle);
+
+            m_TempCameraConfigHandles.Clear();
+            m_TempCameraConfigs.Clear();
+        }
+
+        private void _OnEarlyUpdate()
+        {
+            // Perform updates before calling ArPresto_update.
+            _UpdateDisplayGeometry();
+            if (SessionComponent != null)
+            {
+                _SetConfiguration(SessionComponent.SessionConfig);
+            }
+
+            // Update ArPresto and potentially ArCore.
+            ExternApi.ArPresto_update();
+
+            // Get state information from ARPresto.
+            ApiPrestoStatus prestoStatus = ApiPrestoStatus.Uninitialized;
+            IntPtr sessionHandle = IntPtr.Zero;
+            IntPtr frameHandle = IntPtr.Zero;
+            ExternApi.ArPresto_getStatus(ref prestoStatus);
+            ExternApi.ArPresto_getSession(ref sessionHandle);
+            ExternApi.ArPresto_getFrame(ref frameHandle);
+
+            SessionStatus = prestoStatus.ToSessionStatus();
+
+            // Update native session reference to match presto.
+            if (sessionHandle == IntPtr.Zero)
+            {
+                NativeSession = null;
+            }
+            else if (NativeSession == null)
+            {
+                NativeSession = new NativeSession(sessionHandle, frameHandle);
+            }
+
+            // Update the native session with the newest frame.
             if (NativeSession != null)
             {
                 NativeSession.OnUpdate(frameHandle);
             }
 
-            SetConfiguration(SessionComponent.SessionConfig);
-
             _UpdateTextureIfNeeded();
 
-            InstantPreviewManager.OnEarlyUpdate();
-
-            if (EarlyUpdateEvent != null)
+            if (EarlyUpdate != null)
             {
-                EarlyUpdateEvent();
+                EarlyUpdate();
             }
         }
 
@@ -185,7 +219,6 @@ namespace GoogleARCoreInternal
             BackgroundTexture = null;
             NativeSession = null;
             SessionComponent = null;
-            IsTracking = false;
             SessionStatus = SessionStatus.None;
         }
 
@@ -231,21 +264,33 @@ namespace GoogleARCoreInternal
             BackgroundTexture.UpdateExternalTexture(new IntPtr(backgroundTextureId));
         }
 
-        private void _UpdateState()
+        private void _SetConfiguration(ARCoreSessionConfig config)
         {
-            ApiPrestoStatus prestoStatus = ApiPrestoStatus.Uninitialized;
-            ExternApi.ArPresto_getStatus(ref prestoStatus);
+            if (config == null)
+            {
+                return;
+            }
 
-            IsTracking = prestoStatus == ApiPrestoStatus.Resumed;
-            SessionStatus = prestoStatus.ToSessionStatus();
+            if (m_CachedConfig == null || !config.Equals(m_CachedConfig) ||
+                (config.AugmentedImageDatabase != null && config.AugmentedImageDatabase.m_IsDirty) ||
+                ExperimentManager.Instance.IsConfigurationDirty)
+            {
+                var prestoConfig = new ApiPrestoConfig(config);
+                ExternApi.ArPresto_setConfiguration(ref prestoConfig);
+                m_CachedConfig = ScriptableObject.CreateInstance<ARCoreSessionConfig>();
+                m_CachedConfig.CopyFrom(config);
+            }
         }
 
-        private void _SetDisplayGeometry(IntPtr sessionHandle, ScreenOrientation orientation, int width, int height)
+        private void _UpdateDisplayGeometry()
         {
             const int androidRotation0 = 0;
             const int androidRotation90 = 1;
             const int androidRotation180 = 2;
             const int androidRotation270 = 3;
+
+            IntPtr sessionHandle = IntPtr.Zero;
+            ExternApi.ArPresto_getSession(ref sessionHandle);
 
             if (sessionHandle == IntPtr.Zero)
             {
@@ -253,7 +298,7 @@ namespace GoogleARCoreInternal
             }
 
             int androidOrientation = 0;
-            switch (orientation)
+            switch (Screen.orientation)
             {
                 case ScreenOrientation.LandscapeLeft:
                     androidOrientation = androidRotation90;
@@ -269,7 +314,7 @@ namespace GoogleARCoreInternal
                     break;
             }
 
-            ExternApi.ArSession_setDisplayGeometry(sessionHandle, androidOrientation, width, height);
+            ExternApi.ArSession_setDisplayGeometry(sessionHandle, androidOrientation, Screen.width, Screen.height);
         }
 
         private struct ExternApi

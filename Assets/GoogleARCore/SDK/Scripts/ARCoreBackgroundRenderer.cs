@@ -30,6 +30,7 @@ namespace GoogleARCore
     /// Renders the device's camera as a background to the attached Unity camera component.
     /// </summary>
     [RequireComponent(typeof(Camera))]
+    [HelpURL("https://developers.google.com/ar/reference/unity/class/GoogleARCore/ARCoreBackgroundRenderer")]
     public class ARCoreBackgroundRenderer : MonoBehaviour
     {
         /// <summary>
@@ -99,8 +100,8 @@ namespace GoogleARCore
         {
             if (m_BackgroundRenderer != null)
             {
-                m_BackgroundRenderer.camera = null;
                 m_BackgroundRenderer.mode = ARRenderMode.StandardBackground;
+                m_BackgroundRenderer.camera = null;
             }
         }
     }
