@@ -13,7 +13,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   MatchCameraFramerate: 1
   PlaneFindingMode: 0
-  EnableLightEstimation: 1
-  EnableCloudAnchor: 0
-  AugmentedImageDatabase: {fileID: 11400000, guid: f1a3d525d38b04529b8a76165c22e96a,
+  EnableLightEstimation: 0
+  AugmentedImageDatabase: {fileID: 11400000, guid: c3e077e231877401e8d2163ebbbc9dc6,
     type: 2}

@@ -23,27 +23,18 @@ namespace GoogleARCoreInternal
     using System.Diagnostics.CodeAnalysis;
     using System.IO;
     using System.Text;
+    using System.Xml;
     using UnityEditor;
     using UnityEditor.Build;
     using UnityEngine;
 
-    internal class CloudAnchorPreprocessBuild : IPreprocessBuild
+    internal class CloudAnchorPreprocessBuild : PreprocessBuildBase
     {
         private const string k_ManifestTemplateGuid = "5e182918f0b8c4929a3d4b0af0ed6f56";
         private const string k_PluginsFolderGuid = "93be2b9777c348648a2d9151b7e233fc";
         private const string k_RuntimeSettingsPath = "GoogleARCore/Resources/RuntimeSettings";
 
-        [SuppressMessage("UnityRules.UnityStyleRules", "US1000:FieldsMustBeUpperCamelCase",
-         Justification = "Overriden property.")]
-        public int callbackOrder
-        {
-            get
-            {
-                return 0;
-            }
-        }
-
-        public void OnPreprocessBuild(BuildTarget target, string path)
+        public override void OnPreprocessBuild(BuildTarget target, string path)
         {
             if (target == BuildTarget.Android)
             {
@@ -61,7 +52,9 @@ namespace GoogleARCoreInternal
             var jdkPath = UnityEditor.EditorPrefs.GetString("JdkPath");
             if (string.IsNullOrEmpty(jdkPath))
             {
-                Debug.Log("JDK path Unity pref is not set. Falling back to JAVA_HOME environment variable.");
+                Debug.Log(
+                    "Unity 'Preferences > External Tools > Android JDK' path is not set. " +
+                    "Falling back to JAVA_HOME environment variable.");
                 jdkPath = System.Environment.GetEnvironmentVariable("JAVA_HOME");
             }
 
@@ -76,11 +69,19 @@ namespace GoogleARCoreInternal
             var pluginsFolderPath = Path.Combine(cachedCurrentDirectory,
                 AssetDatabase.GUIDToAssetPath(k_PluginsFolderGuid));
             string cloudAnchorsManifestAarPath = Path.Combine(pluginsFolderPath, "cloud_anchor_manifest.aar");
+            var jarPath = Path.Combine(jdkPath, "bin/jar");
 
             if (cloudAnchorsEnabled)
             {
+                // If the Api Key didn't change then do nothing.
+                if (!_IsApiKeyDirty(jarPath, cloudAnchorsManifestAarPath,
+                  ARCoreProjectSettings.Instance.CloudServicesApiKey))
+                {
+                    return;
+                }
+
                 // Replace the project's cloud anchor AAR with the newly generated AAR.
-                Debug.Log("Enabling cloud anchors in this build.");
+                Debug.Log("Enabling Cloud Anchors in this build.");
 
                 var tempDirectoryPath = Path.Combine(cachedCurrentDirectory, FileUtil.GetUniqueTempPathInProject());
 
@@ -95,7 +96,6 @@ namespace GoogleARCoreInternal
                     // Extract the "template AAR" and remove it.
                     string output;
                     string errors;
-                    var jarPath = Path.Combine(jdkPath, "bin/jar");
                     ShellHelper.RunCommand(jarPath, string.Format("xf \"{0}\"", manifestTemplatePath),
                         out output, out errors);
 
@@ -139,17 +139,60 @@ namespace GoogleARCoreInternal
             }
             else
             {
-                Debug.Log("A cloud anchor API key has not been set.  Cloud anchors are disabled in this build.");
+                Debug.Log("Cloud Anchor API key has not been set. Cloud Anchors will be disabled in this build.");
                 File.Delete(cloudAnchorsManifestAarPath);
                 AssetDatabase.Refresh();
             }
+        }
+
+        private bool _IsApiKeyDirty(string jarPath, string aarPath, string apiKey)
+        {
+            bool isApiKeyDirty = true;
+            var cachedCurrentDirectory = Directory.GetCurrentDirectory();
+            var tempDirectoryPath = Path.Combine(cachedCurrentDirectory, FileUtil.GetUniqueTempPathInProject());
+
+            if (!File.Exists(aarPath))
+            {
+                return isApiKeyDirty;
+            }
+
+            try
+            {
+                // Move to a temp directory.
+                Directory.CreateDirectory(tempDirectoryPath);
+                Directory.SetCurrentDirectory(tempDirectoryPath);
+                var tempAarPath = Path.Combine(tempDirectoryPath, "cloud_anchor_manifest.aar");
+                File.Copy(aarPath, tempAarPath, true);
+
+                // Extract the aar.
+                string output;
+                string errors;
+                ShellHelper.RunCommand(jarPath, string.Format("xf \"{0}\"", tempAarPath),
+                    out output, out errors);
+
+                // Read Api key parameter in manifest file.
+                var manifestPath = Path.Combine(tempDirectoryPath, "AndroidManifest.xml");
+                XmlDocument xmlDocument = new XmlDocument();
+                xmlDocument.Load(manifestPath);
+                XmlNode metaDataNode = xmlDocument.SelectSingleNode("/manifest/application/meta-data");
+                string oldApiKey = metaDataNode.Attributes["android:value"].Value;
+                isApiKeyDirty = !apiKey.Equals(oldApiKey);
+            }
+            finally
+            {
+                // Cleanup.
+                Directory.SetCurrentDirectory(cachedCurrentDirectory);
+                Directory.Delete(tempDirectoryPath, true);
+            }
+
+            return isApiKeyDirty;
         }
 
         private void _PreprocessIosBuild()
         {
             var runtimeSettingsPath = Path.Combine(Application.dataPath, k_RuntimeSettingsPath);
             Directory.CreateDirectory(runtimeSettingsPath);
-            string cloudServicesApiKey = ARCoreProjectSettings.Instance.CloudServicesApiKey;
+            string cloudServicesApiKey = ARCoreProjectSettings.Instance.IosCloudServicesApiKey;
             File.WriteAllText(Path.Combine(runtimeSettingsPath, "CloudServicesApiKey.txt"), cloudServicesApiKey);
             AssetDatabase.Refresh();
         }

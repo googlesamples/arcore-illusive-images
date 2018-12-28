@@ -27,12 +27,20 @@ namespace GoogleARCore
     /// Holds settings that are used to configure the session.
     /// </summary>
     [CreateAssetMenu(fileName = "ARCoreSessionConfig", menuName = "GoogleARCore/SessionConfig", order = 1)]
+    [HelpURL("https://developers.google.com/ar/reference/unity/class/GoogleARCore/ARCoreSessionConfig")]
     public class ARCoreSessionConfig : ScriptableObject
     {
         /// <summary>
-        /// Toggles whether the rendering frame rate matches the background camera frame rate.
-        /// Setting this to true will also set QualitySetting.vSyncCount to 0, which will make your entire app to run at the background camera frame rate (including animations, UI interaction, etc.).
-        /// Setting this to false could incur extra power overhead due to rendering the same background more than once.
+        /// Toggles whether ARCore may introduce a delay into Unity's frame update to
+        /// match the rate that the camera sensor is delivering frames (this is 30 frames-per-second
+        /// on most devices).  Enabling this setting can reduce power consumption caused by rendering
+        /// the same background texture more than once.  Since enabling this setting also sets
+        /// QualitySetting.vSyncCount to 0 the entire Unity application (e.g animations, UI) will also
+        /// update at the camera sensor frame rate.
+        ///
+        /// Note that enabling this setting does not guarentee each Unity frame will have a new and unique
+        /// camera background texture.  This is because the period of time ARCore will wait for a new camera
+        /// frame to become available is capped (currently at 66ms) to avoid a deadlock.
         /// </summary>
         [Tooltip("Toggles whether the rendering frame rate matches the background camera frame rate")]
         public bool MatchCameraFramerate = true;
@@ -53,14 +61,21 @@ namespace GoogleARCore
         /// <summary>
         /// Toggles whether cloud anchor is enabled.
         /// </summary>
-        [Tooltip("Toggles whether cloud anchor is enabled.")]
+        [Tooltip("Toggles whether the cloud anchor feature is enabled.")]
         public bool EnableCloudAnchor = false;
 
         /// <summary>
         /// The database to use for detecting AugmentedImage Trackables.
+        /// When this value is null, Augmented Image detection is disabled.
         /// </summary>
         [Tooltip("The database to use for detecting AugmentedImage Trackables.")]
         public AugmentedImageDatabase AugmentedImageDatabase;
+
+        /// <summary>
+        /// Chooses which focus mode will be used in ARCore camera.
+        /// </summary>
+        [Tooltip("Chooses which focus mode will be used in ARCore camera.")]
+        public CameraFocusMode CameraFocusMode = CameraFocusMode.Fixed;
 
         /// <summary>
         ///  Gets or sets a value indicating whether PlaneFinding is enabled.
@@ -97,7 +112,8 @@ namespace GoogleARCore
                 PlaneFindingMode != otherConfig.PlaneFindingMode ||
                 EnableLightEstimation != otherConfig.EnableLightEstimation ||
                 EnableCloudAnchor != otherConfig.EnableCloudAnchor ||
-                AugmentedImageDatabase != otherConfig.AugmentedImageDatabase)
+                AugmentedImageDatabase != otherConfig.AugmentedImageDatabase ||
+                CameraFocusMode != otherConfig.CameraFocusMode)
             {
                 return false;
             }
@@ -125,6 +141,7 @@ namespace GoogleARCore
             EnableLightEstimation = other.EnableLightEstimation;
             EnableCloudAnchor = other.EnableCloudAnchor;
             AugmentedImageDatabase = other.AugmentedImageDatabase;
+            CameraFocusMode = other.CameraFocusMode;
         }
     }
 }

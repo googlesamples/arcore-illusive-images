@@ -62,6 +62,7 @@ namespace GoogleARCore
         /// </summary>
         public string Name
         {
+            [SuppressMemoryAllocationError(IsWarning = true, Reason = "Allocates new string")]
             get
             {
                 return m_NativeSession.AugmentedImageApi.GetName(m_TrackableNativeHandle);
@@ -85,7 +86,7 @@ namespace GoogleARCore
         }
 
         /// <summary>
-        /// Gets the estimated width, in metres, of the corresponding physical image, as measured along
+        /// Gets the estimated width, in meters, of the corresponding physical image, as measured along
         /// the local X-axis (point from image left to image right) of the coordinate space centered on the
         /// image.
         ///
@@ -105,7 +106,7 @@ namespace GoogleARCore
         }
 
         /// <summary>
-        /// Gets the estimated height, in metres, of the corresponding physical image, as measured along the local
+        /// Gets the estimated height, in meters, of the corresponding physical image, as measured along the local
         /// Z-axis (pointing from image bottom to image top) of the coordinate space centered on the image.
         ///
         /// ARCore will attempt to estimate the physical image's height based on its understanding of the world. If

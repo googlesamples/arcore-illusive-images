@@ -35,7 +35,7 @@ namespace GoogleARCoreInternal
     using UnityEditor;
 #endif
 
-#if UNITY_IOS
+#if UNITY_IOS && !UNITY_EDITOR
     using AndroidImport = GoogleARCoreInternal.DllImportNoop;
     using IOSImport = System.Runtime.InteropServices.DllImportAttribute;
 #else
@@ -52,7 +52,13 @@ namespace GoogleARCoreInternal
         /// <summary>
         /// Name of the Instant Preview plugin library.
         /// </summary>
-        public const string InstantPreviewNativeApi = "instant_preview_unity_plugin";
+        public const string InstantPreviewNativeApi = "arcore_instant_preview_unity_plugin";
+
+        /// <summary>
+        /// Location of the Instant Preview warning prefab.
+        /// </summary>
+        public const string InstantPreviewWarningPrefabPath =
+            "Assets/GoogleARCore/SDK/InstantPreview/Prefabs/Instant Preview Touch Warning.prefab";
 
         // Guid is taken from meta file and should never change.
         private const string k_ApkGuid = "cf7b10762fe921e40a18151a6c92a8a6";
@@ -60,14 +66,16 @@ namespace GoogleARCoreInternal
         private const float k_MaxTolerableAspectRatioDifference = 0.1f;
         private const string k_MismatchedAspectRatioWarningFormatString =
             "The aspect ratio of your game window is different from the aspect ratio of your Instant Preview camera " +
-            "texture. Please resize your game window's aspect ratio to match, or your preview will be distorted. The " +
-            "camera texture resolution is {0}, {1}.";
+            "texture. Please resize your game window's aspect ratio to match, or your preview will be distorted. " +
+            "The camera texture resolution is {0}, {1}.";
 
         private static readonly WaitForEndOfFrame k_WaitForEndOfFrame = new WaitForEndOfFrame();
 
         private static bool s_PauseWarned = false;
-        private static bool s_DisabledLightEstimationWarned = false;
-        private static bool s_DisabledPlaneFindingWarned = false;
+
+        // Throttle warnings to at most once every N seconds.
+        private static ThrottledLogMessage s_DisableLightEstimationWarning = new ThrottledLogMessage(5f);
+        private static ThrottledLogMessage s_DisablePlaneFindingWarning = new ThrottledLogMessage(5f);
 
         /// <summary>
         /// Coroutine method that communicates to the Instant Preview plugin
@@ -126,13 +134,18 @@ namespace GoogleARCoreInternal
             var adbPath = InstantPreviewManager.GetAdbPath();
             if (adbPath == null)
             {
-                Debug.LogError("Instant Preview requires your Unity Android SDK path to be set. Please set it under " +
-                               "'Preferences > External Tools > Android'. You may need to install the Android SDK first.");
+                Debug.LogError("Instant Preview requires your Unity Android SDK path to be set. " +
+                               "Please set it under 'Preferences > External Tools > Android'. " +
+                               "You may need to install the Android SDK first.");
                 yield break;
             }
             else if (!File.Exists(adbPath))
             {
-                Debug.LogErrorFormat("adb not found at \"{0}\". Please add adb to your SDK path and restart the Unity editor.", adbPath);
+                Debug.LogErrorFormat("adb not found at \"{0}\". Please verify that 'Preferences > " +
+                                     "External Tools > Android' has the correct Android SDK path, " +
+                                     "that the Android Platform Tools are installed, and that " +
+                                     "\"{0}\" exists. You may need to install the Android SDK first.",
+                                     adbPath);
                 yield break;
             }
 
@@ -189,7 +202,7 @@ namespace GoogleARCoreInternal
         public static void OnEarlyUpdate()
         {
             var session = LifecycleManager.Instance.SessionComponent;
-            if (Application.isEditor || session == null)
+            if (!Application.isEditor || session == null)
             {
                 return;
             }
@@ -206,16 +219,16 @@ namespace GoogleARCoreInternal
                 return;
             }
 
-            if (!s_DisabledLightEstimationWarned && !config.EnableLightEstimation)
+            if (!config.EnableLightEstimation)
             {
-                Debug.LogWarning("ARCore light estimation cannot be disabled in editor.");
-                s_DisabledLightEstimationWarned = true;
+                s_DisableLightEstimationWarning.ThrottledLogWarningFormat(
+                    "ARCore light estimation cannot be disabled in editor.");
             }
 
-            if (!s_DisabledPlaneFindingWarned && config.PlaneFindingMode == DetectedPlaneFindingMode.Disabled)
+            if (config.PlaneFindingMode == DetectedPlaneFindingMode.Disabled)
             {
-                Debug.LogWarning("ARCore plane finding cannot be disabled in editor.");
-                s_DisabledPlaneFindingWarned = true;
+                s_DisablePlaneFindingWarning.ThrottledLogWarningFormat(
+                    "ARCore plane finding cannot be disabled in editor.");
             }
         }
 
@@ -237,6 +250,17 @@ namespace GoogleARCoreInternal
             RenderTexture screenTexture = null;
             RenderTexture targetTexture = null;
             RenderTexture bgrTexture = null;
+
+#if UNITY_EDITOR
+            // If enabled, instantiate dismissable warning message.
+            InstantPreviewWarning prefab =
+                AssetDatabase.LoadAssetAtPath<InstantPreviewWarning>(InstantPreviewWarningPrefabPath);
+            if (prefab != null && prefab.ShowEditorWarning)
+            {
+                GameObject warningCanvas = GameObject.Instantiate(prefab.gameObject) as GameObject;
+                GameObject.DontDestroyOnLoad(warningCanvas);
+            }
+#endif  // UNITY_EDITOR
 
             // Begins update loop. The coroutine will cease when the
             // ARCoreSession component it's called from is destroyed.
@@ -275,7 +299,8 @@ namespace GoogleARCoreInternal
 
                     if (shouldConvertToBgra)
                     {
-                        bgrTexture = new RenderTexture(screenTexture.width, screenTexture.height, 0, RenderTextureFormat.BGRA32);
+                        bgrTexture = new RenderTexture(screenTexture.width, screenTexture.height, 0,
+                                                       RenderTextureFormat.BGRA32);
                         targetTexture = bgrTexture;
                     }
 
@@ -347,7 +372,8 @@ namespace GoogleARCoreInternal
             }
 
             // Gets adb path from known directory.
-            var adbPath = Path.Combine(Path.GetFullPath(sdkRoot), "platform-tools" + Path.DirectorySeparatorChar + "adb");
+            var adbPath = Path.Combine(Path.GetFullPath(sdkRoot),
+                                       "platform-tools" + Path.DirectorySeparatorChar + "adb");
 
             if (Application.platform == RuntimePlatform.WindowsEditor)
             {
@@ -446,7 +472,7 @@ namespace GoogleARCoreInternal
                             localVersion);
 
                         ShellHelper.RunCommand(adbPath,
-                            string.Format("uninstall com.google.ar.core.instantpreview", apkPath),
+                            "uninstall com.google.ar.core.instantpreview",
                             out output, out errors);
 
                         ShellHelper.RunCommand(adbPath,
@@ -456,10 +482,10 @@ namespace GoogleARCoreInternal
                         // Prints any output from trying to install.
                         if (!string.IsNullOrEmpty(output))
                         {
-                            Debug.LogFormat("Instant Preview installation\n{0}", output);
+                            Debug.LogFormat("Instant Preview installation:\n{0}", output);
                         }
 
-                        if (!string.IsNullOrEmpty(errors))
+                        if (!string.IsNullOrEmpty(errors) && errors != "Success")
                         {
                             Debug.LogErrorFormat("Failed to install Instant Preview app:\n{0}", errors);
                         }
@@ -485,7 +511,9 @@ namespace GoogleARCoreInternal
                         "To instantly reflect your changes on device, the " +
                         "Instant Preview app will be installed on your " +
                         "connected device.\n\nTo disable Instant Preview, " +
-                        "uncheck 'Instant Preview Enabled' under 'Edit > Project Settings > ARCore'.", "Okay", "Don't Install This Time");
+                        "uncheck 'Instant Preview Enabled' under " +
+                        "'Edit > Project Settings > ARCore'.",
+                        "Okay", "Don't Install This Time");
 #else
             return false;
 #endif
@@ -519,8 +547,8 @@ namespace GoogleARCoreInternal
 
             version = versionStringBuilder.ToString();
             Debug.LogFormat("Instant Preview version {0}\n" +
-                            "To disable Instant Preview, " +
-                            "uncheck 'Instant Preview Enabled' under 'Edit > Project Settings > ARCore'.",
+                            "To disable Instant Preview, uncheck " +
+                            "'Instant Preview Enabled' under 'Edit > Project Settings > ARCore'.",
                             version);
             return true;
         }

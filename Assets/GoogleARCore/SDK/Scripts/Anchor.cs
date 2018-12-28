@@ -30,6 +30,7 @@ namespace GoogleARCore
     /// Attaches a GameObject to an ARCore {@link Trackable}.  The transform of the GameObject will be updated to
     /// maintain the semantics of the attachment relationship, which varies between sub-types of Trackable.
     /// </summary>
+    [HelpURL("https://developers.google.com/ar/reference/unity/class/GoogleARCore/Anchor")]
     public class Anchor : MonoBehaviour
     {
         private static Dictionary<IntPtr, Anchor> s_AnchorDict =
@@ -46,17 +47,10 @@ namespace GoogleARCore
         {
             get
             {
-                // TODO (b/73256094): Remove isTracking when the bug is fixed.
-                var isTracking = LifecycleManager.Instance.IsTracking;
                 if (_IsSessionDestroyed())
                 {
                     // Anchors from another session are considered stopped.
                     return TrackingState.Stopped;
-                }
-                else if (!isTracking)
-                {
-                    // If there are no new frames coming in we must manually return paused.
-                    return TrackingState.Paused;
                 }
 
                 return m_NativeSession.AnchorApi.GetTrackingState(m_NativeHandle);

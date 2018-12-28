@@ -48,10 +48,15 @@ namespace GoogleARCore.Examples.HelloAR
         /// <summary>
         /// A model to place when a raycast from a user touch hits a plane.
         /// </summary>
-        public GameObject AndyAndroidPrefab;
+        public GameObject AndyPlanePrefab;
 
         /// <summary>
-        /// A gameobject parenting UI for displaying the "searching for planes" snackbar.
+        /// A model to place when a raycast from a user touch hits a feature point.
+        /// </summary>
+        public GameObject AndyPointPrefab;
+
+        /// <summary>
+        /// A game object parenting UI for displaying the "searching for planes" snackbar.
         /// </summary>
         public GameObject SearchingForPlaneUI;
 
@@ -116,8 +121,19 @@ namespace GoogleARCore.Examples.HelloAR
                 }
                 else
                 {
+                    // Choose the Andy model for the Trackable that got hit.
+                    GameObject prefab;
+                    if (hit.Trackable is FeaturePoint)
+                    {
+                        prefab = AndyPointPrefab;
+                    }
+                    else
+                    {
+                        prefab = AndyPlanePrefab;
+                    }
+
                     // Instantiate Andy model at the hit pose.
-                    var andyObject = Instantiate(AndyAndroidPrefab, hit.Pose.position, hit.Pose.rotation);
+                    var andyObject = Instantiate(prefab, hit.Pose.position, hit.Pose.rotation);
 
                     // Compensate for the hitPose rotation facing away from the raycast (i.e. camera).
                     andyObject.transform.Rotate(0, k_ModelRotation, 0, Space.Self);
